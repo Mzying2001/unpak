@@ -37,15 +37,15 @@ void pak_read_header(FILE *pf, pak_header_t *pheader)
 
 pak_file_info_t *pak_read_file_info(FILE *pf)
 {
+    static char path[256];
     unsigned char flag;
     unsigned char path_len;
-    static char path[256];
     unsigned int file_size;
     unsigned long long timestamp;
 
-    pak_file_info_t *first = (pak_file_info_t *)malloc(sizeof(pak_file_info_t));
+    pak_file_info_t *first = NULL;
     pak_file_info_t *p = NULL;
-    do
+    while (1)
     {
         fread(&flag, 1, 1, pf);
         pak_xor(&flag, 1);
@@ -53,7 +53,7 @@ pak_file_info_t *pak_read_file_info(FILE *pf)
             break;
 
         if (p == NULL)
-            p = first;
+            p = first = (pak_file_info_t *)malloc(sizeof(pak_file_info_t));
         else
         {
             p->next = (pak_file_info_t *)malloc(sizeof(pak_file_info_t));
@@ -79,7 +79,7 @@ pak_file_info_t *pak_read_file_info(FILE *pf)
         p->file_size = file_size;
         p->timestamp = timestamp;
         p->next = NULL;
-    } while (1);
+    }
     return first;
 }
 
@@ -102,7 +102,7 @@ void create_folder_ifneed(const char *file_path)
     for (i = 0; file_path[i]; ++i)
     {
         c = file_path[i];
-        if (c == '/' || c == '\\')
+        if (c == '\\' || c == '/')
         {
             buf[i] = '\0';
             if (access(buf, 0) == -1)
@@ -119,7 +119,7 @@ int pak_release_files(FILE *pf, pak_file_info_t *files, const char *path_out)
 {
     static char path_full[PATH_BUFFER_SIZE];
     static unsigned char buf[OUTPUT_BUFFER_SIZE];
-    
+
     size_t path_out_len = strlen(path_out);
     strcpy(path_full, path_out);
     if (path_full[path_out_len - 1] != '\\' && path_full[path_out_len - 1] != '/')
@@ -185,9 +185,18 @@ int unpak(const char *path_pak, const char *path_out)
     // }
 
     pak_file_info_t *files = pak_read_file_info(pf);
-    int ret = pak_release_files(pf, files, path_out);
+    int ret;
+    if (files == NULL)
+    {
+        ret = 0;
+        puts("error: fail to read file info");
+    }
+    else
+    {
+        ret = pak_release_files(pf, files, path_out);
+        free_file_info(files);
+    }
 
-    free_file_info(files);
     fclose(pf);
     return ret;
 }
